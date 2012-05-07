@@ -34,6 +34,7 @@ module Language.Java.Parser (
 
 import Language.Java.Lexer ( L(..), Token(..), lexer)
 import Language.Java.Syntax
+import Language.Java.Pretty (pretty)
 
 import Text.ParserCombinators.Parsec
 import Text.ParserCombinators.Parsec.Pos
@@ -42,7 +43,8 @@ import Prelude hiding ( exp, catch, (>>), (>>=) )
 import qualified Prelude as P ( (>>), (>>=) ) 
 import Data.Maybe ( isJust, catMaybes )
 import Control.Monad ( ap )
-import Control.Applicative ( (<$>) )
+import Control.Applicative ( (<$>), (<$), (*>), (<*) )
+
 
 type P = GenParser (L Token) ()
 
@@ -58,6 +60,7 @@ infixr 2 >>, >>=
 -- Since I cba to find the instance Monad m => Applicative m declaration.
 (<*>) :: Monad m => m (a -> b) -> m a -> m b
 (<*>) = ap
+infixl 4 <*>
 
 ----------------------------------------------------------------------------
 -- Top-level parsing
@@ -326,6 +329,26 @@ modifier =
     <|> tok KW_Native      >> return Native    
     <|> tok KW_Transient   >> return Transient 
     <|> tok KW_Volatile    >> return Volatile  
+    <|> Annotation <$> annotation
+    
+annotation :: P Annotation
+annotation = tok Op_AtSign *> (    NormalAnnotation <$> name <*> parens evlist
+                               <|> SingleElementAnnotation <$> name <*> parens elementValue
+                               <|> MarkerAnnotation <$> name
+                              )
+
+evlist :: P [(Ident, ElementValue)]
+evlist = seplist1 elementValuePair comma
+
+elementValuePair :: P (Ident, ElementValue)
+elementValuePair = (,) <$> ident <* tok Op_Equal <*> elementValue
+
+elementValue :: P ElementValue
+elementValue = 
+    EVVal <$> (    InitArray <$> arrayInit 
+               <|> InitExp   <$> condExp )
+    <|> EVAnn <$> annotation
+
 
 ----------------------------------------------------------------------------
 -- Variable declarations
@@ -1054,3 +1077,7 @@ period    = tok Period
 ------------------------------------------------------------
 
 test = "public class Foo { }"
+testFile file = do
+  i <- readFile file
+  let r = parseCompilationUnit i
+  putStrLn$ either (("Parsing error:\n"++) . show) (show . pretty) r
