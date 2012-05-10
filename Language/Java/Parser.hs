@@ -43,7 +43,7 @@ import Prelude hiding ( exp, catch, (>>), (>>=) )
 import qualified Prelude as P ( (>>), (>>=) ) 
 import Data.Maybe ( isJust, catMaybes )
 import Control.Monad ( ap )
-import Control.Applicative ( (<$>), (<$), (*>), (<*) )
+import Control.Applicative ( (<$>), (<$), (<*) )
 
 
 type P = GenParser (L Token) ()
@@ -332,10 +332,11 @@ modifier =
     <|> Annotation <$> annotation
     
 annotation :: P Annotation
-annotation = tok Op_AtSign *> (    NormalAnnotation <$> name <*> parens evlist
-                               <|> SingleElementAnnotation <$> name <*> parens elementValue
-                               <|> MarkerAnnotation <$> name
-                              )
+annotation = flip ($) <$ tok Op_AtSign <*> name <*> (
+               try (flip NormalAnnotation <$> parens evlist)
+           <|> try (flip SingleElementAnnotation <$> parens elementValue)
+           <|> try (MarkerAnnotation <$ return ())
+        )
 
 evlist :: P [(Ident, ElementValue)]
 evlist = seplist1 elementValuePair comma
